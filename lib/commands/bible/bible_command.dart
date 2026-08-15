@@ -1,8 +1,9 @@
 import 'package:nyxx/nyxx.dart';
 import 'package:nyxx_commands/nyxx_commands.dart';
 
-import 'package:bible_bot/parsing/bible_reference_parser.dart';
+import 'package:bible_bot/commands/bible/bible_reference_input.dart';
 import 'package:bible_bot/pagination/bible_paginator.dart';
+import 'package:bible_bot/parsing/bible_reference_parser.dart';
 
 /// Creates the `!bible` command group.
 ///
@@ -24,6 +25,7 @@ ChatGroup createBibleCommand() {
           'bible-lookup',
           (
             ChatContext context,
+            @UseConverter(bibleReferenceInputConverter)
             String input,
           ) async {
             await _handleBibleLookup(

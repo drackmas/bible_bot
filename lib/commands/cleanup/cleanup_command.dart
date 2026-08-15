@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:nyxx/nyxx.dart';
 import 'package:nyxx_commands/nyxx_commands.dart';
 import 'package:nyxx_extensions/nyxx_extensions.dart';
@@ -27,57 +29,120 @@ ChatGroup createCleanupCommand() {
   );
 }
 
-/// Deletes the requested number of recent messages from the
-/// current channel.
+/// Deletes the requested number of messages immediately
+/// preceding the cleanup command.
 ///
-/// Usage:
+/// The cleanup command itself is not counted.
+///
+/// Example:
 ///
 /// `!cleanup messages 3`
+///
+/// deletes the three messages immediately before the command,
+/// then deletes the command itself.
 Future<void> cleanupMessages(
   ChatContext context,
   int amount,
 ) async {
   if (context.guild == null) {
-    await _respondError(
+    await _sendChannelMessage(
       context,
-      'Cleanup',
-      'This command can only be used inside a server.',
+      MessageBuilder(
+        embeds: [
+          EmbedBuilder(
+            title: '❌ Cleanup',
+            description:
+                'This command can only be used inside a server.',
+            color: const DiscordColor(0xD32F2F),
+          ),
+        ],
+      ),
     );
 
     return;
   }
 
   if (amount < 1) {
-    await _respondError(
+    await _sendChannelMessage(
       context,
-      'Cleanup',
-      'You must specify at least **1** message.',
+      MessageBuilder(
+        embeds: [
+          EmbedBuilder(
+            title: '❌ Cleanup',
+            description:
+                'You must specify at least **1** message.',
+            color: const DiscordColor(0xD32F2F),
+          ),
+        ],
+      ),
     );
 
     return;
   }
 
   if (amount > 100) {
-    await _respondError(
+    await _sendChannelMessage(
       context,
-      'Cleanup',
-      'You can delete a maximum of **100** messages at once.',
+      MessageBuilder(
+        embeds: [
+          EmbedBuilder(
+            title: '❌ Cleanup',
+            description:
+                'You can delete a maximum of **100** messages at once.',
+            color: const DiscordColor(0xD32F2F),
+          ),
+        ],
+      ),
     );
 
     return;
   }
 
+  if (context is! MessageChatContext) {
+    await context.respond(
+      MessageBuilder(
+        embeds: [
+          EmbedBuilder(
+            title: '❌ Cleanup',
+            description:
+                'This command must be used as a text command.',
+            color: const DiscordColor(0xD32F2F),
+          ),
+        ],
+      ),
+    );
+
+    return;
+  }
+
+  final commandMessage = context.message;
+
   try {
-    final messages = await _getRecentMessages(
+    final messages = await _getMessagesBefore(
       context.channel.messages,
+      commandMessage.id,
       amount,
     );
 
     if (messages.isEmpty) {
-      await _respondError(
+      final response = await _sendChannelMessage(
         context,
-        'Cleanup',
-        'There are no messages available to delete.',
+        MessageBuilder(
+          embeds: [
+            EmbedBuilder(
+              title: '🧹 Cleanup',
+              description:
+                  'There are no messages available to delete.',
+              color: const DiscordColor(0xFFA000),
+            ),
+          ],
+        ),
+      );
+
+      await commandMessage.delete();
+
+      await _deleteLater(
+        response,
       );
 
       return;
@@ -90,15 +155,20 @@ Future<void> cleanupMessages(
         await message.delete();
         deleted++;
       } catch (error) {
-        // One message failing to delete should not prevent
-        // the remaining messages from being processed.
         print(
           'Failed to delete message ${message.id}: $error',
         );
       }
     }
 
-    await context.respond(
+    // Send the confirmation BEFORE deleting the command.
+    //
+    // We deliberately use channel.sendMessage() rather than
+    // context.respond() because context.respond() creates a
+    // reply referencing the command message. We are about to
+    // delete that message.
+    final response = await _sendChannelMessage(
+      context,
       MessageBuilder(
         embeds: [
           EmbedBuilder(
@@ -111,6 +181,15 @@ Future<void> cleanupMessages(
         ],
       ),
     );
+
+    // Now remove the command itself.
+    await commandMessage.delete();
+
+    // Remove the confirmation shortly afterward so cleanup
+    // does not leave a permanent bot message in the channel.
+    await _deleteLater(
+      response,
+    );
   } catch (error, stackTrace) {
     print(
       'Cleanup error: $error',
@@ -118,28 +197,40 @@ Future<void> cleanupMessages(
 
     print(stackTrace);
 
-    await _respondError(
+    // We intentionally do NOT use context.respond() here.
+    //
+    // If the command message was deleted before the exception
+    // occurred, a response referencing it would produce:
+    //
+    // MESSAGE_REFERENCE_UNKNOWN_MESSAGE
+    await _sendChannelMessage(
       context,
-      'Cleanup Failed',
-      _friendlyError(error),
+      MessageBuilder(
+        embeds: [
+          EmbedBuilder(
+            title: '❌ Cleanup Failed',
+            description: _friendlyError(error),
+            color: const DiscordColor(0xD32F2F),
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// Gets the newest [amount] messages from a channel.
+/// Gets up to [amount] messages immediately preceding [before].
 ///
-/// nyxx_extensions provides MessageManager.stream(), which
-/// transparently handles Discord's paginated message-history API.
-///
-/// We request the newest messages by setting [before] to null
-/// and using StreamOrder.mostRecentFirst.
-Future<List<Message>> _getRecentMessages(
+/// This is important because the cleanup command itself must
+/// not be counted as one of the messages being cleaned.
+Future<List<Message>> _getMessagesBefore(
   MessageManager manager,
+  Snowflake before,
   int amount,
 ) async {
   final messages = <Message>[];
 
   await for (final message in manager.stream(
+    before: before,
     pageSize: amount,
     order: StreamOrder.mostRecentFirst,
   )) {
@@ -153,22 +244,32 @@ Future<List<Message>> _getRecentMessages(
   return messages;
 }
 
-Future<void> _respondError(
+/// Sends a message directly to the channel instead of replying
+/// to the command message.
+Future<Message> _sendChannelMessage(
   ChatContext context,
-  String title,
-  String description,
-) async {
-  await context.respond(
-    MessageBuilder(
-      embeds: [
-        EmbedBuilder(
-          title: '❌ $title',
-          description: description,
-          color: const DiscordColor(0xD32F2F),
-        ),
-      ],
-    ),
+  MessageBuilder builder,
+) {
+  return context.channel.sendMessage(
+    builder,
   );
+}
+
+/// Deletes a cleanup confirmation after a short delay.
+Future<void> _deleteLater(
+  Message message,
+) async {
+  await Future<void>.delayed(
+    const Duration(seconds: 5),
+  );
+
+  try {
+    await message.delete();
+  } catch (error) {
+    print(
+      'Failed to delete cleanup confirmation: $error',
+    );
+  }
 }
 
 String _friendlyError(
@@ -178,5 +279,6 @@ String _friendlyError(
       .toString()
       .replaceFirst(
         'Bad state: ',
-        '');
+        '',
+      );
 }
