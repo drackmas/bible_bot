@@ -1,0 +1,98 @@
+[
+  {
+    "id": "ACV",
+    "name": "A Conservative Version",
+    "file": "ACV.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "AKJV",
+    "name": "American King James Version",
+    "file": "AKJV.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "ASV",
+    "name": "American Standard Version",
+    "file": "ASV.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "BBE",
+    "name": "Bible in Basic English",
+    "file": "BBE.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "BSB",
+    "name": "Berean Standard Bible",
+    "file": "BSB.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "CPDV",
+    "name": "Catholic Public Domain Version",
+    "file": "CPDV.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "Darby",
+    "name": "Darby",
+    "file": "Darby.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "DRC",
+    "name": "Douay-Rheims Challoner",
+    "file": "DRC.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "Geneva1599",
+    "name": "Geneva 1599",
+    "file": "Geneva1599.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "KJV",
+    "name": "King James Version",
+    "file": "KJV.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "NHEB",
+    "name": "New Heart English Bible",
+    "file": "NHEB.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "RLT",
+    "name": "Revised Literal Translation",
+    "file": "RLT.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "Rotherham",
+    "name": "Rotherham",
+    "file": "Rotherham.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "Webster",
+    "name": "Webster",
+    "file": "Webster.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "YLT",
+    "name": "Young's Literal Translation",
+    "file": "YLT.json",
+    "canBePrimary": true
+  },
+  {
+    "id": "Tyndale",
+    "name": "Tyndale",
+    "file": "Tyndale.json",
+    "canBePrimary": true
+  }
+]
