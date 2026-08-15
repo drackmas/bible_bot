@@ -52,7 +52,9 @@ class BibleEmbedRenderer {
       if (currentVerses.isNotEmpty) {
         pages.add(
           BibleRenderPage(
-            verses: List.unmodifiable(currentVerses),
+            verses: List.unmodifiable(
+              currentVerses,
+            ),
             description: currentText,
           ),
         );
@@ -62,12 +64,16 @@ class BibleEmbedRenderer {
       currentText = rendered;
 
       if (currentText.length > descriptionLimit) {
-        final chunks = splitOversized(currentText);
+        final chunks = splitOversized(
+          currentText,
+        );
 
         for (var i = 0; i < chunks.length; i++) {
           pages.add(
             BibleRenderPage(
-              verses: i == 0 ? [verse] : const [],
+              verses: i == 0
+                  ? [verse]
+                  : const [],
               description: chunks[i],
             ),
           );
@@ -81,7 +87,9 @@ class BibleEmbedRenderer {
     if (currentVerses.isNotEmpty) {
       pages.add(
         BibleRenderPage(
-          verses: List.unmodifiable(currentVerses),
+          verses: List.unmodifiable(
+            currentVerses,
+          ),
           description: currentText,
         ),
       );
@@ -105,13 +113,8 @@ class BibleEmbedRenderer {
     required String translation,
     required Verse verse,
   }) async {
-    /*
-     * Commentary/highlights only apply to KJV.
-     *
-     * This is deliberately based on the translation ID passed to the
-     * renderer, not on the Bible file name.
-     */
-    final isKjv = translation.trim().toUpperCase() == 'KJV';
+    final isKjv =
+        translation.trim().toUpperCase() == 'KJV';
 
     Commentary? commentary;
 
@@ -123,23 +126,27 @@ class BibleEmbedRenderer {
       );
     }
 
-    /*
-     * Always start highlighting from the ORIGINAL verse text.
-     *
-     * Do not highlight an already-highlighted string. Doing that causes
-     * later highlights to interact with the ** markdown inserted by
-     * earlier highlights.
-     */
     final originalText = verse.text;
 
-    final escapedText = escapeDiscord(originalText);
-
+    /*
+     * KJV:
+     *
+     *   Existing highlights are highlighted.
+     *   Tags are also highlighted if they occur in
+     *   the verse and aren't already covered by an
+     *   existing highlight.
+     *
+     * Non-KJV:
+     *
+     *   Absolutely no Mandela metadata.
+     */
     final highlightedText = isKjv && commentary != null
-        ? applyHighlights(
-            escapedText,
+        ? applyHighlightsAndTags(
+            originalText,
             commentary.highlights,
+            commentary.tags,
           )
-        : escapedText;
+        : escapeDiscord(originalText);
 
     final buffer = StringBuffer();
 
@@ -147,28 +154,25 @@ class BibleEmbedRenderer {
       '**${verse.verse}** $highlightedText',
     );
 
-    /*
-     * Commentary metadata is only displayed for KJV.
-     */
     if (isKjv && commentary != null) {
       /*
-       * Hashtags are separate from highlights.
+       * HASHTAGS
        *
-       * A hashtag appearing in the verse does NOT automatically become
-       * a highlight. Only entries in "highlights" are verse highlights.
+       * These remain completely separate from tags.
        */
       if (commentary.hashtags.isNotEmpty) {
         final hashtags = commentary.hashtags
             .map(
-              (tag) {
-                final color =
-                    tag.color.trim().toLowerCase();
+              (hashtag) {
+                final emoji =
+                    hashtag.color
+                                .trim()
+                                .toLowerCase() ==
+                            'red'
+                        ? '🔴'
+                        : '🟢';
 
-                final emoji = color == 'red'
-                    ? '🔴'
-                    : '🟢';
-
-                return '$emoji #${tag.text.trim()}';
+                return '$emoji #${hashtag.text.trim()}';
               },
             )
             .join('  ');
@@ -179,7 +183,34 @@ class BibleEmbedRenderer {
       }
 
       /*
-       * Commentary itself appears beneath the hashtags.
+       * TAGS
+       *
+       * Tags do NOT get a # prefix.
+       *
+       * They are deliberately displayed on their
+       * own line underneath hashtags.
+       */
+      if (commentary.tags.isNotEmpty) {
+        final tags = commentary.tags
+            .map(
+              (tag) => tag.text.trim(),
+            )
+            .where(
+              (text) => text.isNotEmpty,
+            )
+            .join(', ');
+
+        if (tags.isNotEmpty) {
+          buffer
+            ..write('\n')
+            ..write('Tags: $tags');
+        }
+      }
+
+      /*
+       * COMMENTARY
+       *
+       * Commentary remains underneath the tags.
        */
       if (commentary.text.trim().isNotEmpty) {
         buffer
@@ -227,36 +258,34 @@ class BibleEmbedRenderer {
   }
 
   /*
-   * Finds all highlight ranges against the ORIGINAL text and then builds
-   * the final Markdown exactly once.
+   * Highlights BOTH:
    *
-   * This fixes the previous implementation's biggest problem:
+   * 1. explicit highlights from mandela_effect.json
+   * 2. tags from mandela_effect.json
    *
-   *     text -> highlight A -> highlight B -> highlight C
+   * BUT:
    *
-   * could cause B/C to match inside the "**" inserted by A.
+   * a tag is only added as a highlight when its
+   * occurrence is NOT already covered by an existing
+   * highlight.
    *
-   * Instead we now do:
-   *
-   *     original text
-   *          |
-   *          +-- find A
-   *          +-- find B
-   *          +-- find C
-   *          |
-   *          v
-   *     build final string once
+   * Everything is calculated against the ORIGINAL
+   * verse text before any ** markdown is inserted.
    */
-  static String applyHighlights(
+  static String applyHighlightsAndTags(
     String text,
     List<Highlight> highlights,
+    List<Tag> tags,
   ) {
-    if (text.isEmpty || highlights.isEmpty) {
+    if (text.isEmpty) {
       return text;
     }
 
     final ranges = <_HighlightRange>[];
 
+    /*
+     * First add explicit highlight ranges.
+     */
     for (final highlight in highlights) {
       final target = highlight.text.trim();
 
@@ -274,20 +303,64 @@ class BibleEmbedRenderer {
           _HighlightRange(
             start: match.start,
             end: match.end,
+            source: _HighlightSource.highlight,
+          ),
+        );
+      }
+    }
+
+    /*
+     * Now add tag ranges.
+     *
+     * A tag is NOT added if the matching text is
+     * already completely covered by an explicit
+     * highlight.
+     */
+    for (final tag in tags) {
+      final target = tag.text.trim();
+
+      if (target.isEmpty) {
+        continue;
+      }
+
+      final matches = _findMatches(
+        text,
+        target,
+      );
+
+      for (final match in matches) {
+        final alreadyHighlighted =
+            ranges.any(
+          (range) =>
+              range.source ==
+                  _HighlightSource.highlight &&
+              match.start >= range.start &&
+              match.end <= range.end,
+        );
+
+        if (alreadyHighlighted) {
+          continue;
+        }
+
+        ranges.add(
+          _HighlightRange(
+            start: match.start,
+            end: match.end,
+            source: _HighlightSource.tag,
           ),
         );
       }
     }
 
     if (ranges.isEmpty) {
-      return text;
+      return escapeDiscord(text);
     }
 
     /*
-     * Sort by:
+     * Sort by location.
      *
-     * 1. Starting position
-     * 2. Longer match first when two matches start together
+     * When two ranges start at the same location,
+     * prefer the longer one.
      */
     ranges.sort(
       (a, b) {
@@ -305,12 +378,7 @@ class BibleEmbedRenderer {
     /*
      * Merge overlapping ranges.
      *
-     * Example:
-     *
-     * "John the Baptist"
-     * "John Baptist"
-     *
-     * should not produce broken nested Markdown.
+     * Explicit highlights win over tags.
      */
     final merged = <_HighlightRange>[];
 
@@ -322,14 +390,39 @@ class BibleEmbedRenderer {
 
       final previous = merged.last;
 
+      /*
+       * Completely contained by the existing range.
+       */
+      if (range.start >= previous.start &&
+          range.end <= previous.end) {
+        continue;
+      }
+
+      /*
+       * Overlapping ranges.
+       */
       if (range.start <= previous.end) {
-        if (range.end > previous.end) {
-          merged[merged.length - 1] =
-              _HighlightRange(
-            start: previous.start,
-            end: range.end,
-          );
-        }
+        /*
+         * If either range is an explicit highlight,
+         * keep it as the highlight.
+         */
+        final source =
+            previous.source ==
+                    _HighlightSource.highlight ||
+                range.source ==
+                    _HighlightSource.highlight
+            ? _HighlightSource.highlight
+            : _HighlightSource.tag;
+
+        merged[
+          merged.length - 1
+        ] = _HighlightRange(
+          start: previous.start,
+          end: range.end > previous.end
+              ? range.end
+              : previous.end,
+          source: source,
+        );
 
         continue;
       }
@@ -338,7 +431,10 @@ class BibleEmbedRenderer {
     }
 
     /*
-     * Build the result once.
+     * Build the final Markdown ONCE.
+     *
+     * This prevents one highlight from accidentally
+     * matching the ** inserted by another.
      */
     final buffer = StringBuffer();
 
@@ -347,9 +443,11 @@ class BibleEmbedRenderer {
     for (final range in merged) {
       if (range.start > cursor) {
         buffer.write(
-          text.substring(
-            cursor,
-            range.start,
+          escapeDiscord(
+            text.substring(
+              cursor,
+              range.start,
+            ),
           ),
         );
       }
@@ -357,9 +455,11 @@ class BibleEmbedRenderer {
       buffer.write('**');
 
       buffer.write(
-        text.substring(
-          range.start,
-          range.end,
+        escapeDiscord(
+          text.substring(
+            range.start,
+            range.end,
+          ),
         ),
       );
 
@@ -370,7 +470,9 @@ class BibleEmbedRenderer {
 
     if (cursor < text.length) {
       buffer.write(
-        text.substring(cursor),
+        escapeDiscord(
+          text.substring(cursor),
+        ),
       );
     }
 
@@ -378,17 +480,33 @@ class BibleEmbedRenderer {
   }
 
   /*
-   * Finds case-insensitive occurrences of target.
+   * Keep this method for compatibility with anything
+   * else in the project that may still call
+   * applyHighlights().
    *
-   * We intentionally do NOT use word boundaries here.
+   * It now uses the same safe highlighting engine.
+   */
+  static String applyHighlights(
+    String text,
+    List<Highlight> highlights,
+  ) {
+    return applyHighlightsAndTags(
+      text,
+      highlights,
+      const [],
+    );
+  }
+
+  /*
+   * Case-insensitive substring matching.
    *
-   * Your data contains highlights such as:
+   * We deliberately do NOT use word boundaries because
+   * your highlight data contains punctuation and phrases
+   * such as:
    *
-   *     ":"
-   *     "repent: hath"
-   *     "it? or"
-   *
-   * Word-boundary matching would break those.
+   *   ":"
+   *   "repent: hath"
+   *   "it? or"
    */
   static List<_HighlightMatch> _findMatches(
     String text,
@@ -400,13 +518,17 @@ class BibleEmbedRenderer {
       return matches;
     }
 
-    final lowerText = text.toLowerCase();
-    final lowerTarget = target.toLowerCase();
+    final lowerText =
+        text.toLowerCase();
+
+    final lowerTarget =
+        target.toLowerCase();
 
     var searchStart = 0;
 
     while (searchStart <=
-        lowerText.length - lowerTarget.length) {
+        lowerText.length -
+            lowerTarget.length) {
       final index = lowerText.indexOf(
         lowerTarget,
         searchStart,
@@ -419,14 +541,14 @@ class BibleEmbedRenderer {
       matches.add(
         _HighlightMatch(
           start: index,
-          end: index + lowerTarget.length,
+          end:
+              index + lowerTarget.length,
         ),
       );
 
       /*
-       * Move forward by one character rather than the entire target.
-       *
-       * This allows overlapping matches to be discovered.
+       * Move one character so overlapping
+       * matches are still discovered.
        */
       searchStart = index + 1;
     }
@@ -434,7 +556,9 @@ class BibleEmbedRenderer {
     return matches;
   }
 
-  static String escapeDiscord(String text) {
+  static String escapeDiscord(
+    String text,
+  ) {
     return text
         .replaceAll(
           '\\',
@@ -453,8 +577,10 @@ class BibleEmbedRenderer {
 
     var remaining = text;
 
-    while (remaining.length > descriptionLimit) {
-      var splitAt = remaining.lastIndexOf(
+    while (remaining.length >
+        descriptionLimit) {
+      var splitAt =
+          remaining.lastIndexOf(
         ' ',
         descriptionLimit,
       );
@@ -483,13 +609,20 @@ class BibleEmbedRenderer {
   }
 }
 
+enum _HighlightSource {
+  highlight,
+  tag,
+}
+
 class _HighlightRange {
   final int start;
   final int end;
+  final _HighlightSource source;
 
   const _HighlightRange({
     required this.start,
     required this.end,
+    required this.source,
   });
 }
 
