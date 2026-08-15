@@ -48,26 +48,39 @@ class Commentary {
   });
 
   factory Commentary.fromJson(Map<String, dynamic> json) {
+    final rawHighlights = json['highlights'];
+    final rawHashtags = json['hashtags'];
+
     return Commentary(
-      chapter: (json['chapter'] as num).toInt(),
-      verse: (json['verse'] as num).toInt(),
+      chapter: (json['chapter'] as num?)?.toInt() ?? 0,
+      verse: (json['verse'] as num?)?.toInt() ?? 0,
       text: json['text']?.toString() ?? '',
-      highlights: (json['highlights'] as List? ?? [])
-          .whereType<Map>()
-          .map(
-            (item) => Highlight.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
-          )
-          .toList(),
-      hashtags: (json['hashtags'] as List? ?? [])
-          .whereType<Map>()
-          .map(
-            (item) => HashTag.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
-          )
-          .toList(),
+      highlights: rawHighlights is List
+          ? rawHighlights
+              .whereType<Map>()
+              .map(
+                (item) => Highlight.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .where(
+                (highlight) => highlight.text.trim().isNotEmpty,
+              )
+              .toList()
+          : const [],
+      hashtags: rawHashtags is List
+          ? rawHashtags
+              .whereType<Map>()
+              .map(
+                (item) => HashTag.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .where(
+                (tag) => tag.text.trim().isNotEmpty,
+              )
+              .toList()
+          : const [],
     );
   }
 }
