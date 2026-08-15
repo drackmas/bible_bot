@@ -1,6 +1,7 @@
 import 'package:nyxx/nyxx.dart';
 
 import '../models/commentary.dart';
+import '../models/tag.dart';
 import '../models/verse.dart';
 import '../services/mandela_service.dart';
 
@@ -8,17 +9,13 @@ class BibleRenderPage {
   final List<Verse> verses;
   final String description;
 
-  const BibleRenderPage({
-    required this.verses,
-    required this.description,
-  });
+  const BibleRenderPage({required this.verses, required this.description});
 }
 
 class BibleEmbedRenderer {
   static const int descriptionLimit = 3900;
 
-  static const DiscordColor bibleColor =
-      DiscordColor(0x7850C8);
+  static const DiscordColor bibleColor = DiscordColor(0x7850C8);
 
   static Future<List<BibleRenderPage>> renderPages({
     required String book,
@@ -52,9 +49,7 @@ class BibleEmbedRenderer {
       if (currentVerses.isNotEmpty) {
         pages.add(
           BibleRenderPage(
-            verses: List.unmodifiable(
-              currentVerses,
-            ),
+            verses: List.unmodifiable(currentVerses),
             description: currentText,
           ),
         );
@@ -64,16 +59,12 @@ class BibleEmbedRenderer {
       currentText = rendered;
 
       if (currentText.length > descriptionLimit) {
-        final chunks = splitOversized(
-          currentText,
-        );
+        final chunks = splitOversized(currentText);
 
         for (var i = 0; i < chunks.length; i++) {
           pages.add(
             BibleRenderPage(
-              verses: i == 0
-                  ? [verse]
-                  : const [],
+              verses: i == 0 ? [verse] : const [],
               description: chunks[i],
             ),
           );
@@ -87,9 +78,7 @@ class BibleEmbedRenderer {
     if (currentVerses.isNotEmpty) {
       pages.add(
         BibleRenderPage(
-          verses: List.unmodifiable(
-            currentVerses,
-          ),
+          verses: List.unmodifiable(currentVerses),
           description: currentText,
         ),
       );
@@ -97,10 +86,7 @@ class BibleEmbedRenderer {
 
     if (pages.isEmpty) {
       pages.add(
-        const BibleRenderPage(
-          verses: [],
-          description: 'No verses were found.',
-        ),
+        const BibleRenderPage(verses: [], description: 'No verses were found.'),
       );
     }
 
@@ -113,112 +99,145 @@ class BibleEmbedRenderer {
     required String translation,
     required Verse verse,
   }) async {
-    final isKjv =
-        translation.trim().toUpperCase() == 'KJV';
+    final isKjv = translation.trim().toUpperCase() == 'KJV';
 
     Commentary? commentary;
+    List<BibleTag> globalTags = const [];
 
     if (isKjv) {
-      commentary = await MandelaService.get(
-        book,
-        chapter,
-        verse.verse,
-      );
+      /*
+       * Per-verse data:
+       *
+       * - highlights
+       * - hashtags
+       * - commentary text
+       */
+      commentary = await MandelaService.get(book, chapter, verse.verse);
+
+      /*
+       * Global data:
+       *
+       * - all tags are stored at the root of
+       *   mandela_effect.json
+       */
+      globalTags = await MandelaService.getTags();
     }
 
     final originalText = verse.text;
 
     /*
-     * KJV:
+     * Find which GLOBAL tags actually occur in this verse.
      *
-     *   Existing highlights are highlighted.
-     *   Tags are also highlighted if they occur in
-     *   the verse and aren't already covered by an
-     *   existing highlight.
+     * A global tag can match:
      *
-     * Non-KJV:
-     *
-     *   Absolutely no Mandela metadata.
+     * - its phrase
+     * - any of its variants
      */
-    final highlightedText = isKjv && commentary != null
-        ? applyHighlightsAndTags(
+    final matchedTags = isKjv
+        ? _findMatchingTags(originalText, globalTags)
+        : const <_MatchedTag>[];
+
+    /*
+     * Highlight:
+     *
+     * 1. Per-verse highlights
+     * 2. Global tags that occur in this verse
+     */
+    final highlightedText = isKjv
+        ? _applyHighlightsAndTags(
             originalText,
-            commentary.highlights,
-            commentary.tags,
+            commentary?.highlights ?? const [],
+            matchedTags,
           )
         : escapeDiscord(originalText);
 
     final buffer = StringBuffer();
 
-    buffer.write(
-      '**${verse.verse}** $highlightedText',
-    );
+    /*
+     * ============================================================
+     * VERSE
+     * ============================================================
+     */
+    buffer.write('**${verse.verse}** $highlightedText');
 
-    if (isKjv && commentary != null) {
-      /*
-       * HASHTAGS
-       *
-       * These remain completely separate from tags.
-       */
-      if (commentary.hashtags.isNotEmpty) {
-        final hashtags = commentary.hashtags
-            .map(
-              (hashtag) {
-                final emoji =
-                    hashtag.color
-                                .trim()
-                                .toLowerCase() ==
-                            'red'
-                        ? '🔴'
-                        : '🟢';
+    if (!isKjv) {
+      return buffer.toString();
+    }
 
-                return '$emoji #${hashtag.text.trim()}';
-              },
-            )
-            .join('  ');
+    /*
+     * ============================================================
+     * HASHTAGS
+     * ============================================================
+     *
+     * Hashtags are PER-VERSE.
+     *
+     * They are always listed here if the verse has them.
+     */
+    final hashtags = commentary?.hashtags ?? const <HashTag>[];
 
+    if (hashtags.isNotEmpty) {
+      final hashtagText = hashtags
+          .map((hashtag) {
+            final text = hashtag.text.trim();
+
+            if (text.isEmpty) {
+              return '';
+            }
+
+            final emoji = hashtag.color.trim().toLowerCase() == 'red'
+                ? '🔴'
+                : '🟢';
+
+            return '$emoji #$text';
+          })
+          .where((text) => text.isNotEmpty)
+          .join('  ');
+
+      if (hashtagText.isNotEmpty) {
         buffer
           ..write('\n')
-          ..write(hashtags);
+          ..write(hashtagText);
       }
+    }
 
-      /*
-       * TAGS
-       *
-       * Tags do NOT get a # prefix.
-       *
-       * They are deliberately displayed on their
-       * own line underneath hashtags.
-       */
-      if (commentary.tags.isNotEmpty) {
-        final tags = commentary.tags
-            .map(
-              (tag) => tag.text.trim(),
-            )
-            .where(
-              (text) => text.isNotEmpty,
-            )
-            .join(', ');
+    /*
+     * ============================================================
+     * GLOBAL TAGS
+     * ============================================================
+     *
+     * These are NOT stored in Commentary.
+     *
+     * We only display tags that matched this verse.
+     *
+     * Example:
+     *
+     * Tags: bottles, fowl
+     */
+    if (matchedTags.isNotEmpty) {
+      final tagNames = matchedTags
+          .map((matchedTag) => matchedTag.tag.name.trim())
+          .where((name) => name.isNotEmpty)
+          .toSet()
+          .join(', ');
 
-        if (tags.isNotEmpty) {
-          buffer
-            ..write('\n')
-            ..write('Tags: $tags');
-        }
-      }
-
-      /*
-       * COMMENTARY
-       *
-       * Commentary remains underneath the tags.
-       */
-      if (commentary.text.trim().isNotEmpty) {
+      if (tagNames.isNotEmpty) {
         buffer
           ..write('\n')
-          ..write(
-            '> *${escapeDiscord(commentary.text.trim())}*',
-          );
+          ..write('Tags: $tagNames');
       }
+    }
+
+    /*
+     * ============================================================
+     * COMMENTARY
+     * ============================================================
+     */
+    final commentaryText = commentary?.text.trim() ?? '';
+
+    if (commentaryText.isNotEmpty) {
+      buffer
+        ..write('\n')
+        ..write('> *${escapeDiscord(commentaryText)}*');
     }
 
     return buffer.toString();
@@ -239,11 +258,9 @@ class BibleEmbedRenderer {
     if (verses.isEmpty) {
       title = '$book $chapter';
     } else if (verses.length == 1) {
-      title =
-          '$book $chapter:${verses.first.verse}';
+      title = '$book $chapter:${verses.first.verse}';
     } else {
-      title =
-          '$book $chapter:${verses.first.verse}-${verses.last.verse}';
+      title = '$book $chapter:${verses.first.verse}-${verses.last.verse}';
     }
 
     return EmbedBuilder(
@@ -251,31 +268,91 @@ class BibleEmbedRenderer {
       description: page.description,
       color: bibleColor,
       footer: EmbedFooterBuilder(
-        text:
-            '${translation.toUpperCase()} • Page $pageNumber/$totalPages',
+        text: '${translation.toUpperCase()} • Page $pageNumber/$totalPages',
       ),
     );
   }
 
   /*
-   * Highlights BOTH:
+   * ================================================================
+   * FIND GLOBAL TAG MATCHES
+   * ================================================================
    *
-   * 1. explicit highlights from mandela_effect.json
-   * 2. tags from mandela_effect.json
+   * Every tag is global.
    *
-   * BUT:
+   * For each global tag we check:
    *
-   * a tag is only added as a highlight when its
-   * occurrence is NOT already covered by an existing
-   * highlight.
+   *   tag.phrase
+   *   tag.variants
    *
-   * Everything is calculated against the ORIGINAL
-   * verse text before any ** markdown is inserted.
+   * against the actual verse text.
    */
-  static String applyHighlightsAndTags(
+  static List<_MatchedTag> _findMatchingTags(
+    String verseText,
+    List<BibleTag> tags,
+  ) {
+    final result = <_MatchedTag>[];
+
+    for (final tag in tags) {
+      final matches = <_HighlightMatch>[];
+
+      for (final searchTerm in tag.searchTerms) {
+        final term = searchTerm.trim();
+
+        if (term.isEmpty) {
+          continue;
+        }
+
+        final termMatches = _findMatches(verseText, term);
+
+        matches.addAll(termMatches);
+      }
+
+      if (matches.isEmpty) {
+        continue;
+      }
+
+      /*
+       * Remove duplicate matches.
+       *
+       * This can happen when a phrase and variant
+       * resolve to the same text.
+       */
+      final uniqueMatches = <String, _HighlightMatch>{};
+
+      for (final match in matches) {
+        final key = '${match.start}:${match.end}';
+
+        uniqueMatches[key] = match;
+      }
+
+      result.add(_MatchedTag(tag: tag, matches: uniqueMatches.values.toList()));
+    }
+
+    return result;
+  }
+
+  /*
+   * ================================================================
+   * APPLY HIGHLIGHTS + GLOBAL TAGS
+   * ================================================================
+   *
+   * Everything is calculated against the ORIGINAL verse.
+   *
+   * We do NOT add "**" until all matches have been found.
+   *
+   * This prevents broken Markdown such as:
+   *
+   *   ****word****
+   *
+   * or:
+   *
+   *   **old **bottles****
+   */
+  static String _applyHighlightsAndTags(
     String text,
     List<Highlight> highlights,
-    List<Tag> tags,
+    List<_MatchedTag> matchedTags,
   ) {
     if (text.isEmpty) {
       return text;
@@ -284,7 +361,9 @@ class BibleEmbedRenderer {
     final ranges = <_HighlightRange>[];
 
     /*
-     * First add explicit highlight ranges.
+     * ============================================================
+     * PER-VERSE HIGHLIGHTS
+     * ============================================================
      */
     for (final highlight in highlights) {
       final target = highlight.text.trim();
@@ -293,10 +372,7 @@ class BibleEmbedRenderer {
         continue;
       }
 
-      final matches = _findMatches(
-        text,
-        target,
-      );
+      final matches = _findMatches(text, target);
 
       for (final match in matches) {
         ranges.add(
@@ -310,30 +386,23 @@ class BibleEmbedRenderer {
     }
 
     /*
-     * Now add tag ranges.
+     * ============================================================
+     * GLOBAL TAGS
+     * ============================================================
      *
-     * A tag is NOT added if the matching text is
-     * already completely covered by an explicit
-     * highlight.
+     * These are automatically highlighted if they occur
+     * in the verse.
      */
-    for (final tag in tags) {
-      final target = tag.text.trim();
-
-      if (target.isEmpty) {
-        continue;
-      }
-
-      final matches = _findMatches(
-        text,
-        target,
-      );
-
-      for (final match in matches) {
-        final alreadyHighlighted =
-            ranges.any(
+    for (final matchedTag in matchedTags) {
+      for (final match in matchedTag.matches) {
+        /*
+         * If this exact occurrence is already covered
+         * by a per-verse highlight, don't add another
+         * range on top of it.
+         */
+        final alreadyHighlighted = ranges.any(
           (range) =>
-              range.source ==
-                  _HighlightSource.highlight &&
+              range.source == _HighlightSource.highlight &&
               match.start >= range.start &&
               match.end <= range.end,
         );
@@ -357,28 +426,30 @@ class BibleEmbedRenderer {
     }
 
     /*
-     * Sort by location.
-     *
-     * When two ranges start at the same location,
-     * prefer the longer one.
+     * ============================================================
+     * SORT
+     * ============================================================
      */
-    ranges.sort(
-      (a, b) {
-        final startCompare =
-            a.start.compareTo(b.start);
+    ranges.sort((a, b) {
+      final startComparison = a.start.compareTo(b.start);
 
-        if (startCompare != 0) {
-          return startCompare;
-        }
+      if (startComparison != 0) {
+        return startComparison;
+      }
 
-        return b.end.compareTo(a.end);
-      },
-    );
+      /*
+         * If two matches start at the same character,
+         * use the longer one first.
+         */
+      return b.end.compareTo(a.end);
+    });
 
     /*
-     * Merge overlapping ranges.
+     * ============================================================
+     * MERGE OVERLAPPING RANGES
+     * ============================================================
      *
-     * Explicit highlights win over tags.
+     * Explicit per-verse highlights have priority.
      */
     final merged = <_HighlightRange>[];
 
@@ -391,10 +462,22 @@ class BibleEmbedRenderer {
       final previous = merged.last;
 
       /*
-       * Completely contained by the existing range.
+       * Completely contained inside previous range.
        */
-      if (range.start >= previous.start &&
-          range.end <= previous.end) {
+      if (range.start >= previous.start && range.end <= previous.end) {
+        /*
+         * If the contained range is an explicit
+         * highlight, upgrade the source.
+         */
+        if (range.source == _HighlightSource.highlight &&
+            previous.source != _HighlightSource.highlight) {
+          merged[merged.length - 1] = _HighlightRange(
+            start: previous.start,
+            end: previous.end,
+            source: _HighlightSource.highlight,
+          );
+        }
+
         continue;
       }
 
@@ -402,153 +485,131 @@ class BibleEmbedRenderer {
        * Overlapping ranges.
        */
       if (range.start <= previous.end) {
-        /*
-         * If either range is an explicit highlight,
-         * keep it as the highlight.
-         */
         final source =
-            previous.source ==
-                    _HighlightSource.highlight ||
-                range.source ==
-                    _HighlightSource.highlight
+            previous.source == _HighlightSource.highlight ||
+                range.source == _HighlightSource.highlight
             ? _HighlightSource.highlight
             : _HighlightSource.tag;
 
-        merged[
-          merged.length - 1
-        ] = _HighlightRange(
+        merged[merged.length - 1] = _HighlightRange(
           start: previous.start,
-          end: range.end > previous.end
-              ? range.end
-              : previous.end,
+          end: range.end > previous.end ? range.end : previous.end,
           source: source,
         );
 
         continue;
       }
 
+      /*
+       * No overlap.
+       */
       merged.add(range);
     }
 
     /*
-     * Build the final Markdown ONCE.
-     *
-     * This prevents one highlight from accidentally
-     * matching the ** inserted by another.
+     * ============================================================
+     * BUILD FINAL DISCORD MARKDOWN
+     * ============================================================
      */
     final buffer = StringBuffer();
 
     var cursor = 0;
 
     for (final range in merged) {
+      /*
+       * Normal text before highlight.
+       */
       if (range.start > cursor) {
-        buffer.write(
-          escapeDiscord(
-            text.substring(
-              cursor,
-              range.start,
-            ),
-          ),
-        );
+        buffer.write(escapeDiscord(text.substring(cursor, range.start)));
       }
 
+      /*
+       * Highlighted text.
+       */
       buffer.write('**');
 
-      buffer.write(
-        escapeDiscord(
-          text.substring(
-            range.start,
-            range.end,
-          ),
-        ),
-      );
+      buffer.write(escapeDiscord(text.substring(range.start, range.end)));
 
       buffer.write('**');
 
       cursor = range.end;
     }
 
+    /*
+     * Remaining text after last highlight.
+     */
     if (cursor < text.length) {
-      buffer.write(
-        escapeDiscord(
-          text.substring(cursor),
-        ),
-      );
+      buffer.write(escapeDiscord(text.substring(cursor)));
     }
 
     return buffer.toString();
   }
 
   /*
-   * Keep this method for compatibility with anything
-   * else in the project that may still call
-   * applyHighlights().
+   * ================================================================
+   * FIND TEXT MATCHES
+   * ================================================================
    *
-   * It now uses the same safe highlighting engine.
+   * Case-insensitive.
+   *
+   * We use whole-word matching for normal words.
+   *
+   * This prevents:
+   *
+   *   ox
+   *
+   * from matching:
+   *
+   *   box
+   *   oxygen
+   *
+   * But punctuation is allowed:
+   *
+   *   ox,
+   *   ox.
+   *   "ox"
+   *
+   * Phrases are also supported.
    */
-  static String applyHighlights(
-    String text,
-    List<Highlight> highlights,
-  ) {
-    return applyHighlightsAndTags(
-      text,
-      highlights,
-      const [],
-    );
-  }
-
-  /*
-   * Case-insensitive substring matching.
-   *
-   * We deliberately do NOT use word boundaries because
-   * your highlight data contains punctuation and phrases
-   * such as:
-   *
-   *   ":"
-   *   "repent: hath"
-   *   "it? or"
-   */
-  static List<_HighlightMatch> _findMatches(
-    String text,
-    String target,
-  ) {
+  static List<_HighlightMatch> _findMatches(String text, String target) {
     final matches = <_HighlightMatch>[];
 
     if (text.isEmpty || target.isEmpty) {
       return matches;
     }
 
-    final lowerText =
-        text.toLowerCase();
-
-    final lowerTarget =
-        target.toLowerCase();
+    final lowerText = text.toLowerCase();
+    final lowerTarget = target.toLowerCase();
 
     var searchStart = 0;
 
-    while (searchStart <=
-        lowerText.length -
-            lowerTarget.length) {
-      final index = lowerText.indexOf(
-        lowerTarget,
-        searchStart,
-      );
+    while (searchStart < lowerText.length) {
+      final index = lowerText.indexOf(lowerTarget, searchStart);
 
       if (index == -1) {
         break;
       }
 
-      matches.add(
-        _HighlightMatch(
-          start: index,
-          end:
-              index + lowerTarget.length,
-        ),
-      );
+      final end = index + lowerTarget.length;
+
+      /*
+       * Character before match.
+       */
+      final validStart = index == 0 || !_isWordCharacter(lowerText[index - 1]);
+
+      /*
+       * Character after match.
+       */
+      final validEnd =
+          end == lowerText.length || !_isWordCharacter(lowerText[end]);
+
+      if (validStart && validEnd) {
+        matches.add(_HighlightMatch(start: index, end: end));
+      }
 
       /*
        * Move one character so overlapping
-       * matches are still discovered.
+       * matches can still be found.
        */
       searchStart = index + 1;
     }
@@ -556,49 +617,78 @@ class BibleEmbedRenderer {
     return matches;
   }
 
-  static String escapeDiscord(
-    String text,
-  ) {
-    return text
-        .replaceAll(
-          '\\',
-          r'\\',
-        )
-        .replaceAll(
-          '`',
-          r'\`',
-        );
+  /*
+   * ================================================================
+   * WORD CHARACTER CHECK
+   * ================================================================
+   */
+  static bool _isWordCharacter(String character) {
+    if (character.isEmpty) {
+      return false;
+    }
+
+    final code = character.codeUnitAt(0);
+
+    /*
+     * A-Z
+     */
+    if (code >= 65 && code <= 90) {
+      return true;
+    }
+
+    /*
+     * a-z
+     */
+    if (code >= 97 && code <= 122) {
+      return true;
+    }
+
+    /*
+     * 0-9
+     */
+    if (code >= 48 && code <= 57) {
+      return true;
+    }
+
+    /*
+     * Underscore.
+     */
+    if (code == 95) {
+      return true;
+    }
+
+    return false;
   }
 
-  static List<String> splitOversized(
-    String text,
-  ) {
+  /*
+   * ================================================================
+   * DISCORD ESCAPING
+   * ================================================================
+   */
+  static String escapeDiscord(String text) {
+    return text.replaceAll('\\', r'\\').replaceAll('`', r'\`');
+  }
+
+  /*
+   * ================================================================
+   * SPLIT OVERSIZED EMBEDS
+   * ================================================================
+   */
+  static List<String> splitOversized(String text) {
     final result = <String>[];
 
     var remaining = text;
 
-    while (remaining.length >
-        descriptionLimit) {
-      var splitAt =
-          remaining.lastIndexOf(
-        ' ',
-        descriptionLimit,
-      );
+    while (remaining.length > descriptionLimit) {
+      var splitAt = remaining.lastIndexOf(' ', descriptionLimit);
 
       if (splitAt <= 0) {
         splitAt = descriptionLimit;
       }
 
-      result.add(
-        remaining.substring(
-          0,
-          splitAt,
-        ),
-      );
+      result.add(remaining.substring(0, splitAt));
 
-      remaining = remaining
-          .substring(splitAt)
-          .trimLeft();
+      remaining = remaining.substring(splitAt).trimLeft();
     }
 
     if (remaining.isNotEmpty) {
@@ -609,11 +699,36 @@ class BibleEmbedRenderer {
   }
 }
 
-enum _HighlightSource {
-  highlight,
-  tag,
+/*
+ * ================================================================
+ * INTERNAL MATCHED TAG
+ * ================================================================
+ *
+ * Private because it is only used inside this renderer.
+ *
+ * This avoids the analyzer warning:
+ *
+ * "Invalid use of a private type in a public API."
+ */
+class _MatchedTag {
+  final BibleTag tag;
+  final List<_HighlightMatch> matches;
+
+  const _MatchedTag({required this.tag, required this.matches});
 }
 
+/*
+ * ================================================================
+ * INTERNAL HIGHLIGHT SOURCE
+ * ================================================================
+ */
+enum _HighlightSource { highlight, tag }
+
+/*
+ * ================================================================
+ * INTERNAL HIGHLIGHT RANGE
+ * ================================================================
+ */
 class _HighlightRange {
   final int start;
   final int end;
@@ -626,12 +741,14 @@ class _HighlightRange {
   });
 }
 
+/*
+ * ================================================================
+ * INTERNAL MATCH
+ * ================================================================
+ */
 class _HighlightMatch {
   final int start;
   final int end;
 
-  const _HighlightMatch({
-    required this.start,
-    required this.end,
-  });
+  const _HighlightMatch({required this.start, required this.end});
 }

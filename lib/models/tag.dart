@@ -26,24 +26,51 @@ class BibleTag {
     );
   }
 
-  /// All strings that should be checked against
-  /// the KJV verse.
+  /*
+   * All possible forms of this tag that should be
+   * searched for in a verse.
+   *
+   * Example:
+   *
+   * phrase:
+   *   "fowl"
+   *
+   * variants:
+   *   ["Fowl", "Fowls"]
+   *
+   * searchTerms:
+   *   ["fowl", "Fowl", "Fowls"]
+   */
   List<String> get searchTerms {
     final result = <String>[];
 
-    if (phrase.trim().isNotEmpty) {
-      result.add(phrase.trim());
+    final mainPhrase = phrase.trim();
+
+    if (mainPhrase.isNotEmpty) {
+      result.add(mainPhrase);
     }
 
     for (final variant in variants) {
       final value = variant.trim();
 
-      if (value.isNotEmpty &&
-          !result.contains(value)) {
+      if (value.isEmpty) {
+        continue;
+      }
+
+      if (!result.contains(value)) {
         result.add(value);
       }
     }
 
     return result;
+  }
+
+  @override
+  String toString() {
+    return 'BibleTag('
+        'name: $name, '
+        'phrase: $phrase, '
+        'variants: $variants'
+        ')';
   }
 }

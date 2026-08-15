@@ -4,12 +4,15 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../models/commentary.dart';
+import '../models/tag.dart';
 
 class MandelaService {
   static Map<String, Map<String, Commentary>>? _cache;
 
+  static List<BibleTag>? _tagsCache;
+
   static Future<void> _ensureLoaded() async {
-    if (_cache != null) {
+    if (_cache != null && _tagsCache != null) {
       return;
     }
 
@@ -22,38 +25,38 @@ class MandelaService {
 
     if (!await file.exists()) {
       _cache = {};
+      _tagsCache = [];
       return;
     }
 
     final raw = await file.readAsString();
-
     final decoded = jsonDecode(raw);
 
     if (decoded is! Map) {
       _cache = {};
+      _tagsCache = [];
       return;
     }
 
     final data =
         Map<String, dynamic>.from(decoded);
 
-    final rawCommentaries =
-        data['commentaries'];
-
-    if (rawCommentaries is! Map) {
-      _cache = {};
-      return;
-    }
+    /*
+     * ============================================================
+     * PER-VERSE COMMENTARIES
+     * ============================================================
+     */
 
     final commentaries =
-        Map<String, dynamic>.from(
-      rawCommentaries,
-    );
+        data['commentaries']
+            as Map<String, dynamic>? ??
+        {};
 
     final result =
         <String, Map<String, Commentary>>{};
 
-    for (final entry in commentaries.entries) {
+    for (final entry
+        in commentaries.entries) {
       final book = entry.key;
       final values = entry.value;
 
@@ -74,11 +77,6 @@ class MandelaService {
           Map<String, dynamic>.from(item),
         );
 
-        if (commentary.chapter < 1 ||
-            commentary.verse < 1) {
-          continue;
-        }
-
         final key = _key(
           commentary.chapter,
           commentary.verse,
@@ -91,6 +89,50 @@ class MandelaService {
     }
 
     _cache = result;
+
+    /*
+     * ============================================================
+     * GLOBAL TAGS
+     * ============================================================
+     *
+     * These are NOT inside a Commentary.
+     *
+     * They live at:
+     *
+     * {
+     *   "commentaries": { ... },
+     *
+     *   "tags": [
+     *     {
+     *       "name": "bottles",
+     *       "phrase": "bottles",
+     *       "variants": []
+     *     }
+     *   ]
+     * }
+     */
+
+    final tags =
+        data['tags'];
+
+    final globalTags =
+        <BibleTag>[];
+
+    if (tags is List) {
+      for (final item in tags) {
+        if (item is! Map) {
+          continue;
+        }
+
+        globalTags.add(
+          BibleTag.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        );
+      }
+    }
+
+    _tagsCache = globalTags;
   }
 
   static String _key(
@@ -100,6 +142,9 @@ class MandelaService {
     return '$chapter:$verse';
   }
 
+  /*
+   * Get the commentary belonging to one verse.
+   */
   static Future<Commentary?> get(
     String book,
     int chapter,
@@ -107,7 +152,8 @@ class MandelaService {
   ) async {
     await _ensureLoaded();
 
-    final byVerse = _cache?[book];
+    final byVerse =
+        _cache?[book];
 
     if (byVerse == null) {
       return null;
@@ -118,13 +164,18 @@ class MandelaService {
     ];
   }
 
-  static Future<Map<int, Commentary>> getChapter(
+  /*
+   * Get all commentary for a chapter.
+   */
+  static Future<Map<int, Commentary>>
+      getChapter(
     String book,
     int chapter,
   ) async {
     await _ensureLoaded();
 
-    final byVerse = _cache?[book];
+    final byVerse =
+        _cache?[book];
 
     if (byVerse == null) {
       return {};
@@ -135,9 +186,11 @@ class MandelaService {
 
     for (final commentary
         in byVerse.values) {
-      if (commentary.chapter == chapter) {
-        result[commentary.verse] =
-            commentary;
+      if (commentary.chapter ==
+          chapter) {
+        result[
+          commentary.verse
+        ] = commentary;
       }
     }
 
@@ -145,30 +198,21 @@ class MandelaService {
   }
 
   /*
-   * Useful while debugging the data file.
+   * ============================================================
+   * GLOBAL TAG ACCESS
+   * ============================================================
    *
-   * This does not expose anything to Discord.
+   * This is the important new method.
+   *
+   * Unlike get(), this does NOT take book/chapter/verse because
+   * the tags are global.
    */
-  static Future<bool> hasCommentary(
-    String book,
-    int chapter,
-    int verse,
-  ) async {
-    final commentary = await get(
-      book,
-      chapter,
-      verse,
+  static Future<List<BibleTag>>
+      getTags() async {
+    await _ensureLoaded();
+
+    return List.unmodifiable(
+      _tagsCache ?? const [],
     );
-
-    return commentary != null;
-  }
-
-  /*
-   * Allows the application to force a reload if
-   * mandela_effect.json is changed while the bot
-   * is running.
-   */
-  static void clearCache() {
-    _cache = null;
   }
 }
