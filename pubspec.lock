@@ -241,6 +241,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
+  nyxx_extensions:
+    dependency: "direct main"
+    description:
+      name: nyxx_extensions
+      sha256: "9a6a2ac635dffdd9cf7b1f78e375e9b4833e8d25dfe53cced58acca2ca7d7434"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.4.0"
   oauth2:
     dependency: transitive
     description:

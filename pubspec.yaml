@@ -1,6 +1,6 @@
 name: bible_bot
 description: A sample command-line application.
-version: 1.0.0
+version: 2.0.0
 # repository: https://github.com/my_org/my_repo
 
 environment:
@@ -10,6 +10,7 @@ environment:
 dependencies:
   nyxx: ^6.9.1
   nyxx_commands: ^6.1.0
+  nyxx_extensions: ^4.4.0
   path: ^1.9.1
 
 dev_dependencies:

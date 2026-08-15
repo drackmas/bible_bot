@@ -2,12 +2,15 @@ class Highlight {
   final String text;
   final String color;
 
-  Highlight({required this.text, required this.color});
+  const Highlight({
+    required this.text,
+    required this.color,
+  });
 
   factory Highlight.fromJson(Map<String, dynamic> json) {
     return Highlight(
-      text: json['text'] as String? ?? '',
-      color: json['color'] as String? ?? 'yellow',
+      text: json['text']?.toString() ?? '',
+      color: json['color']?.toString() ?? 'yellow',
     );
   }
 }
@@ -16,12 +19,15 @@ class HashTag {
   final String text;
   final String color;
 
-  HashTag({required this.text, required this.color});
+  const HashTag({
+    required this.text,
+    required this.color,
+  });
 
   factory HashTag.fromJson(Map<String, dynamic> json) {
     return HashTag(
-      text: json['text'] as String? ?? '',
-      color: json['color'] as String? ?? 'green',
+      text: json['text']?.toString() ?? '',
+      color: json['color']?.toString() ?? 'green',
     );
   }
 }
@@ -33,7 +39,7 @@ class Commentary {
   final List<Highlight> highlights;
   final List<HashTag> hashtags;
 
-  Commentary({
+  const Commentary({
     required this.chapter,
     required this.verse,
     required this.text,
@@ -45,12 +51,22 @@ class Commentary {
     return Commentary(
       chapter: (json['chapter'] as num).toInt(),
       verse: (json['verse'] as num).toInt(),
-      text: json['text'] as String? ?? '',
+      text: json['text']?.toString() ?? '',
       highlights: (json['highlights'] as List? ?? [])
-          .map((e) => Highlight.fromJson(e as Map<String, dynamic>))
+          .whereType<Map>()
+          .map(
+            (item) => Highlight.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
           .toList(),
       hashtags: (json['hashtags'] as List? ?? [])
-          .map((e) => HashTag.fromJson(e as Map<String, dynamic>))
+          .whereType<Map>()
+          .map(
+            (item) => HashTag.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
           .toList(),
     );
   }
