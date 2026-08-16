@@ -397,132 +397,229 @@ class BibleService {
     final map = <String, String>{
       'gen': 'Genesis',
       'genesis': 'Genesis',
+
       'ex': 'Exodus',
       'exo': 'Exodus',
       'exodus': 'Exodus',
+
       'lev': 'Leviticus',
       'leviticus': 'Leviticus',
+
       'num': 'Numbers',
       'numbers': 'Numbers',
+
       'deut': 'Deuteronomy',
       'deuteronomy': 'Deuteronomy',
+
       'josh': 'Joshua',
       'joshua': 'Joshua',
+
       'judg': 'Judges',
       'judges': 'Judges',
+
       'ruth': 'Ruth',
+
       '1sam': '1Samuel',
       '1samuel': '1Samuel',
+
       '2sam': '2Samuel',
       '2samuel': '2Samuel',
+
       '1king': '1Kings',
       '1kings': '1Kings',
+
       '2king': '2Kings',
       '2kings': '2Kings',
+
       '1chron': '1Chronicles',
       '1chronicles': '1Chronicles',
+
       '2chron': '2Chronicles',
       '2chronicles': '2Chronicles',
+
       'ezra': 'Ezra',
+
       'neh': 'Nehemiah',
       'nehemiah': 'Nehemiah',
+
       'est': 'Esther',
       'esther': 'Esther',
+
       'job': 'Job',
+
       'ps': 'Psalms',
       'psalm': 'Psalms',
       'psalms': 'Psalms',
+
       'prov': 'Proverbs',
       'proverbs': 'Proverbs',
+
       'eccl': 'Ecclesiastes',
       'ecclesiastes': 'Ecclesiastes',
+
       'song': 'SongofSolomon',
       'songofsolomon': 'SongofSolomon',
       'songofsongs': 'SongofSolomon',
+
       'isa': 'Isaiah',
       'isaiah': 'Isaiah',
+
       'jer': 'Jeremiah',
       'jeremiah': 'Jeremiah',
+
       'lam': 'Lamentations',
       'lamentations': 'Lamentations',
+
       'ezek': 'Ezekiel',
       'ezekiel': 'Ezekiel',
+
       'dan': 'Daniel',
       'daniel': 'Daniel',
+
       'hos': 'Hosea',
       'hosea': 'Hosea',
+
       'joel': 'Joel',
+
       'amos': 'Amos',
+
       'obad': 'Obadiah',
       'obadiah': 'Obadiah',
+
       'jonah': 'Jonah',
+
       'mic': 'Micah',
       'micah': 'Micah',
+
       'nah': 'Nahum',
       'nahum': 'Nahum',
+
       'hab': 'Habakkuk',
       'habakkuk': 'Habakkuk',
+
       'zeph': 'Zephaniah',
       'zephaniah': 'Zephaniah',
+
       'hag': 'Haggai',
       'haggai': 'Haggai',
+
       'zech': 'Zechariah',
       'zechariah': 'Zechariah',
+
       'mal': 'Malachi',
       'malachi': 'Malachi',
+
       'matt': 'Matthew',
       'mat': 'Matthew',
       'matthew': 'Matthew',
+
       'mk': 'Mark',
       'mark': 'Mark',
+
       'luke': 'Luke',
       'lk': 'Luke',
+
       'john': 'John',
       'jn': 'John',
+
       'acts': 'Acts',
       'act': 'Acts',
+
       'rom': 'Romans',
       'romans': 'Romans',
+
       '1cor': '1Corinthians',
       '1corinthians': '1Corinthians',
+
       '2cor': '2Corinthians',
       '2corinthians': '2Corinthians',
+
       'gal': 'Galatians',
       'galatians': 'Galatians',
+
       'eph': 'Ephesians',
       'ephesians': 'Ephesians',
+
       'phil': 'Philippians',
       'philippians': 'Philippians',
+
       'col': 'Colossians',
       'colossians': 'Colossians',
+
       '1thess': '1Thessalonians',
       '1thessalonians': '1Thessalonians',
+
       '2thess': '2Thessalonians',
       '2thessalonians': '2Thessalonians',
+
       '1tim': '1Timothy',
       '1timothy': '1Timothy',
+
       '2tim': '2Timothy',
       '2timothy': '2Timothy',
+
       'tit': 'Titus',
       'titus': 'Titus',
+
       'philem': 'Philemon',
       'philemon': 'Philemon',
+
       'heb': 'Hebrews',
       'hebrews': 'Hebrews',
+
       'james': 'James',
       'jas': 'James',
+
       '1pet': '1Peter',
       '1peter': '1Peter',
+
       '2pet': '2Peter',
       '2peter': '2Peter',
+
       '1john': '1John',
       '2john': '2John',
       '3john': '3John',
+
       'jude': 'Jude',
+
+      // ------------------------------------------------------------
+      // Revelation
+      // ------------------------------------------------------------
+
       'rev': 'Revelation',
       'revelation': 'Revelation',
+      'revelations' : 'Revelation',
+
+      // Common alternate names.
+      'revelationofjohn': 'Revelation',
+      'therevelation': 'Revelation',
+      'therevelationofjohn': 'Revelation',
+
+      // Longer traditional names.
+      'revelationofsaintjohn': 'Revelation',
+      'therevelationofsaintjohn': 'Revelation',
+
+      // Common alternate title.
+      'apocalypse': 'Revelation',
+      'apoc': 'Revelation',
     };
 
+    /*
+     * Normalize the user's input before looking it up.
+     *
+     * Spaces, periods, underscores, and hyphens are ignored.
+     *
+     * Examples:
+     *
+     *   "Revelation of John"
+     *       -> "revelationofjohn"
+     *
+     *   "Revelation-of-John"
+     *       -> "revelationofjohn"
+     *
+     *   "REV."
+     *       -> "rev"
+     */
     final key = input
         .trim()
         .toLowerCase()

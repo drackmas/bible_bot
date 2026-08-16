@@ -223,7 +223,7 @@ class BibleEmbedRenderer {
       if (tagNames.isNotEmpty) {
         buffer
           ..write('\n')
-          ..write('Tags: $tagNames');
+          ..write('🏷️ $tagNames');
       }
     }
 
