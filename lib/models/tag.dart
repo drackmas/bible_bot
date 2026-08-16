@@ -26,38 +26,20 @@ class BibleTag {
     );
   }
 
-  /*
-   * All possible forms of this tag that should be
-   * searched for in a verse.
-   *
-   * Example:
-   *
-   * phrase:
-   *   "fowl"
-   *
-   * variants:
-   *   ["Fowl", "Fowls"]
-   *
-   * searchTerms:
-   *   ["fowl", "Fowl", "Fowls"]
-   */
+  /// All strings that should be checked against
+  /// the KJV verse.
   List<String> get searchTerms {
     final result = <String>[];
 
-    final mainPhrase = phrase.trim();
-
-    if (mainPhrase.isNotEmpty) {
-      result.add(mainPhrase);
+    if (phrase.trim().isNotEmpty) {
+      result.add(phrase.trim());
     }
 
     for (final variant in variants) {
       final value = variant.trim();
 
-      if (value.isEmpty) {
-        continue;
-      }
-
-      if (!result.contains(value)) {
+      if (value.isNotEmpty &&
+          !result.contains(value)) {
         result.add(value);
       }
     }
@@ -65,12 +47,32 @@ class BibleTag {
     return result;
   }
 
-  @override
-  String toString() {
-    return 'BibleTag('
-        'name: $name, '
-        'phrase: $phrase, '
-        'variants: $variants'
-        ')';
+  /// ALL-CAPS tags such as:
+  ///
+  /// GOD
+  /// LORD
+  /// JESUS
+  ///
+  /// are treated as case-sensitive.
+  ///
+  /// Therefore:
+  ///
+  /// GOD != God
+  /// LORD != Lord
+  ///
+  /// Normal tags such as "bottles" remain
+  /// case-insensitive.
+  static bool isCaseSensitive(String value) {
+    final letters = value.replaceAll(
+      RegExp(r'[^A-Za-z]'),
+      '',
+    );
+
+    if (letters.isEmpty) {
+      return false;
+    }
+
+    return letters == letters.toUpperCase() &&
+        letters != letters.toLowerCase();
   }
 }

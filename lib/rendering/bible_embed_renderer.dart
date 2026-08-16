@@ -571,40 +571,93 @@ class BibleEmbedRenderer {
    *
    * Phrases are also supported.
    */
-  static List<_HighlightMatch> _findMatches(String text, String target) {
+  static List<_HighlightMatch> _findMatches(
+    String text,
+    String target,
+  ) {
     final matches = <_HighlightMatch>[];
 
     if (text.isEmpty || target.isEmpty) {
       return matches;
     }
 
-    final lowerText = text.toLowerCase();
-    final lowerTarget = target.toLowerCase();
+    /*
+     * Global ALL-CAPS tags such as:
+     *
+     *   GOD
+     *   LORD
+     *   JESUS
+     *
+     * are case-sensitive.
+     *
+     * Therefore:
+     *
+     *   GOD != God
+     *   LORD != Lord
+     *
+     * Normal tags remain case-insensitive.
+     *
+     * Therefore:
+     *
+     *   bottles == Bottles
+     */
+    final letters = target.replaceAll(
+      RegExp(r'[^A-Za-z]'),
+      '',
+    );
+
+    final caseSensitive =
+        letters.isNotEmpty &&
+        letters == letters.toUpperCase() &&
+        letters != letters.toLowerCase();
+
+    final searchText = caseSensitive
+        ? text
+        : text.toLowerCase();
+
+    final searchTarget = caseSensitive
+        ? target
+        : target.toLowerCase();
 
     var searchStart = 0;
 
-    while (searchStart < lowerText.length) {
-      final index = lowerText.indexOf(lowerTarget, searchStart);
+    while (searchStart < searchText.length) {
+      final index = searchText.indexOf(
+        searchTarget,
+        searchStart,
+      );
 
       if (index == -1) {
         break;
       }
 
-      final end = index + lowerTarget.length;
+      final end = index + searchTarget.length;
 
       /*
        * Character before match.
        */
-      final validStart = index == 0 || !_isWordCharacter(lowerText[index - 1]);
+      final validStart =
+          index == 0 ||
+          !_isWordCharacter(
+            searchText[index - 1],
+          );
 
       /*
        * Character after match.
        */
       final validEnd =
-          end == lowerText.length || !_isWordCharacter(lowerText[end]);
+          end == searchText.length ||
+          !_isWordCharacter(
+            searchText[end],
+          );
 
       if (validStart && validEnd) {
-        matches.add(_HighlightMatch(start: index, end: end));
+        matches.add(
+          _HighlightMatch(
+            start: index,
+            end: end,
+          ),
+        );
       }
 
       /*
