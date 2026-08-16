@@ -3,13 +3,18 @@ import 'package:nyxx_commands/nyxx_commands.dart';
 
 import 'error_response.dart';
 
-void registerCommandErrorHandler(NyxxGateway client, CommandsPlugin commands) {
+void registerCommandErrorHandler(
+  NyxxGateway client,
+  CommandsPlugin commands,
+) {
   commands.onCommandError.listen((error) async {
     await _handleCommandError(error);
   });
 }
 
-Future<void> _handleCommandError(CommandsException error) async {
+Future<void> _handleCommandError(
+  CommandsException error,
+) async {
   if (error is CommandNotFoundException) {
     return;
   }
@@ -123,7 +128,7 @@ Future<void> _handleUnknownCommand(
   final input = content.substring(1).trim();
 
   /*
-   * Ignore a bare "!". 
+   * Ignore a bare "!".
    */
   if (input.isEmpty) {
     await sendChannelError(
@@ -133,6 +138,7 @@ Future<void> _handleUnknownCommand(
           'Please enter a command after `!`.\n\n'
           '**Available commands:**\n'
           '`!bible lookup <reference>`\n'
+          '`!bible versions`\n'
           '`!cleanup messages <amount>`',
     );
 
@@ -155,9 +161,13 @@ Future<void> _handleUnknownCommand(
         message.channel,
         title: '❌ Missing Bible Subcommand',
         message:
-            'Use the `lookup` subcommand.\n\n'
-            '**Example:**\n'
-            '`!bible lookup Genesis 1:1`',
+            'Use one of the available subcommands.\n\n'
+            '**Available commands:**\n'
+            '`!bible lookup <reference>`\n'
+            '`!bible versions`\n\n'
+            '**Examples:**\n'
+            '`!bible lookup Genesis 1:1`\n'
+            '`!bible versions`',
       );
 
       return;
@@ -165,25 +175,28 @@ Future<void> _handleUnknownCommand(
 
     final subcommand = words[1].toLowerCase();
 
-    if (subcommand != 'lookup') {
-      await sendChannelError(
-        message.channel,
-        title: '❌ Unknown Bible Subcommand',
-        message:
-            'I don\'t recognize `!bible $subcommand`.\n\n'
-            '**Available command:**\n'
-            '`!bible lookup <reference>`\n\n'
-            '**Example:**\n'
-            '`!bible lookup Revelation 1:1`',
-      );
-
+    /*
+     * These are valid Bible subcommands.
+     *
+     * Let nyxx_commands handle them and their arguments/errors.
+     */
+    if (subcommand == 'lookup' || subcommand == 'versions') {
       return;
     }
 
-    /*
-     * !bible lookup exists, so let nyxx_commands handle
-     * its arguments/errors.
-     */
+    await sendChannelError(
+      message.channel,
+      title: '❌ Unknown Bible Subcommand',
+      message:
+          'I don\'t recognize `!bible $subcommand`.\n\n'
+          '**Available commands:**\n'
+          '`!bible lookup <reference>`\n'
+          '`!bible versions`\n\n'
+          '**Examples:**\n'
+          '`!bible lookup Revelation 1:1`\n'
+          '`!bible versions`',
+    );
+
     return;
   }
 
@@ -229,6 +242,7 @@ Future<void> _handleUnknownCommand(
         'I don\'t recognize `!$root`.\n\n'
         '**Available commands:**\n'
         '`!bible lookup <reference>`\n'
+        '`!bible versions`\n'
         '`!cleanup messages <amount>`',
   );
 }

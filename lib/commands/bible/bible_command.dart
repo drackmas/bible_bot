@@ -2,9 +2,11 @@ import 'package:nyxx/nyxx.dart';
 import 'package:nyxx_commands/nyxx_commands.dart';
 
 import 'package:bible_bot/commands/bible/bible_reference_input.dart';
-import 'package:bible_bot/errors/bible_exception.dart';
+import 'package:bible_bot/errors/bot_error.dart';
+import 'package:bible_bot/errors/error_response.dart';
 import 'package:bible_bot/pagination/bible_paginator.dart';
 import 'package:bible_bot/parsing/bible_reference_parser.dart';
+import 'package:bible_bot/services/bible_service.dart';
 
 ChatGroup createBibleCommand() {
   return ChatGroup(
@@ -14,107 +16,139 @@ ChatGroup createBibleCommand() {
       ChatCommand(
         'lookup',
         'Look up a Bible passage.',
-        id(
-          'bible-lookup',
-          (
-            ChatContext context,
-            @UseConverter(bibleReferenceInputConverter)
-            String input,
-          ) async {
-            await _handleBibleLookup(
-              context,
-              input,
-            );
-          },
-        ),
+        id('bible-lookup', (
+          ChatContext context,
+          @UseConverter(bibleReferenceInputConverter) String input,
+        ) async {
+          await _handleBibleLookup(context, input);
+        }),
+      ),
+      ChatCommand(
+        'versions',
+        'List available Bible translations.',
+        id('bible-versions', (
+          ChatContext context,
+        ) async {
+          await _handleBibleVersions(context);
+        }),
       ),
     ],
   );
 }
 
+Future<void> _handleBibleVersions(
+  ChatContext context,
+) async {
+  try {
+    final versions = await BibleService.loadAvailableVersions();
+
+    if (versions.isEmpty) {
+      await context.respond(
+        MessageBuilder(
+          embeds: [
+            EmbedBuilder(
+              title: '📖 Bible Versions',
+              description:
+                  'No Bible translations are currently available.',
+              color: DiscordColor.fromRgb(255, 160, 0),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final description = versions
+        .map(
+          (version) => '**${version.id}** — ${version.name}',
+        )
+        .join('\n');
+
+    await context.respond(
+      MessageBuilder(
+        embeds: [
+          EmbedBuilder(
+            title: '📖 Available Bible Versions',
+            description: description,
+            color: DiscordColor.fromRgb(76, 175, 80),
+          ),
+        ],
+      ),
+    );
+  } catch (error, stackTrace) {
+    logBotError(
+      'Failed to load Bible versions',
+      error,
+      stackTrace,
+    );
+
+    await sendErrorResponse(
+      context,
+      title: '❌ Bible Versions Error',
+      message:
+          'Something went wrong while loading the available Bible translations.',
+    );
+  }
+}
 Future<void> _handleBibleLookup(
   ChatContext context,
   String input,
 ) async {
   try {
     final reference =
-        await BibleReferenceParser.parse(
-      input,
-    );
+        await BibleReferenceParser.parse(input);
 
     final message =
         await BiblePaginator.buildMessage(
-      reference: reference,
-      page: 0,
-    );
+          reference: reference,
+          page: 0,
+        );
 
-    await context.respond(
-      message,
-    );
-  } on BibleException catch (error) {
-    /*
-     * Expected/user-facing Bible errors.
-     *
-     * Examples:
-     * - Book does not exist
-     * - Chapter does not exist
-     * - Verse does not exist
-     * - Translation does not exist
-     *
-     * These should NOT produce a stack trace.
-     */
-    print(
-      '[Bible command] ${error.message}',
-    );
-
-    await context.respond(
-      _buildErrorMessage(
-        error.message,
-      ),
-    );
+    await context.respond(message);
   } on FormatException catch (error) {
-    /*
-     * Invalid user input is also expected.
-     */
-    print(
-      '[Bible command] ${error.message}',
+    await sendErrorResponse(
+      context,
+      title: '❌ Invalid Bible Reference',
+      message: error.message,
     );
-
-    await context.respond(
-      _buildErrorMessage(
-        error.message,
-      ),
+  } on BotException catch (error) {
+    await sendErrorResponse(
+      context,
+      title: _errorTitle(error),
+      message: error.userMessage,
     );
   } catch (error, stackTrace) {
-    /*
-     * Only unexpected application failures get a
-     * stack trace.
-     */
-    print(
-      '[Bible command error] $error',
+    logBotError(
+      'Unexpected Bible command error',
+      error,
+      stackTrace,
     );
 
-    print(stackTrace);
-
-    await context.respond(
-      _buildErrorMessage(
-        'Something went wrong while looking up '
-        'that passage. Please try again.',
-      ),
+    await sendErrorResponse(
+      context,
+      title: '❌ Bible Bot Error',
+      message:
+          'Something went wrong while looking up that passage.',
     );
   }
 }
 
-MessageBuilder _buildErrorMessage(
-  String message,
-) {
-  return MessageBuilder(
-    embeds: [
-      EmbedBuilder(
-        title: '❌ Bible Lookup Failed',
-        description: message,
-        color: const DiscordColor(0xD32F2F),
-      ),
-    ],
-  );
+String _errorTitle(BotException error) {
+  if (error is UserInputException) {
+    return '❌ Invalid Bible Reference';
+  }
+
+  if (error is NotFoundException) {
+    return '❌ Bible Passage Not Found';
+  }
+
+  if (error is DataException) {
+    return '❌ Bible Data Error';
+  }
+
+  if (error is ConfigurationException) {
+    return '❌ Bible Configuration Error';
+  }
+
+  return '❌ Bible Bot Error';
 }
