@@ -6,6 +6,7 @@ import 'package:nyxx_commands/nyxx_commands.dart';
 import 'commands/command_registry.dart';
 import 'errors/command_error_handler.dart';
 import 'pagination/bible_pagination_handler.dart';
+import 'listeners/bible_reference_listener.dart';
 
 Future<void> startBot() async {
   final token = Platform.environment['DISCORD_TOKEN'];
@@ -32,6 +33,8 @@ Future<void> startBot() async {
   registerCommandErrorHandler(client, commands);
 
   registerBiblePaginationHandler(client);
+
+  registerBibleReferenceListener(client);
 
   registerUnknownCommandHandler(client, commands);
 
