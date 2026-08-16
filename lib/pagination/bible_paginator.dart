@@ -95,52 +95,109 @@ class BiblePaginator {
   }
 
   static Future<List<Verse>> loadVerses(BibleReference reference) async {
-    switch (reference.type) {
-      case BibleReferenceType.chapter:
-        return BibleService.getChapter(
-          reference.book,
-          reference.chapter,
-          version: reference.translation,
+    /*
+     * CHAPTER LOOKUP
+     *
+     * Genesis 1
+     *
+     * A chapter reference MUST NOT have a verse.
+     */
+    if (reference.type == BibleReferenceType.chapter) {
+      if (reference.startVerse != null || reference.endVerse != null) {
+        throw StateError(
+          'Invalid chapter reference: '
+          '${reference.displayReference} '
+          'contains verse information.',
         );
+      }
 
-      case BibleReferenceType.verse:
-        final verse = reference.startVerse;
+      final verses = await BibleService.getChapter(
+        reference.book,
+        reference.chapter,
+        version: reference.translation,
+      );
 
-        if (verse == null) {
-          throw StateError(
-            'Invalid verse reference: '
-            'startVerse is null.',
-          );
-        }
-
-        return BibleService.getVerseRange(
-          reference.book,
-          reference.chapter,
-          verse,
-          verse,
-          version: reference.translation,
+      if (verses.isEmpty) {
+        throw StateError(
+          'No verses were found for '
+          '${reference.book} ${reference.chapter}.',
         );
+      }
 
-      case BibleReferenceType.verseRange:
-        final startVerse = reference.startVerse;
-
-        final endVerse = reference.endVerse;
-
-        if (startVerse == null || endVerse == null) {
-          throw StateError(
-            'Invalid verse range: '
-            'startVerse and endVerse are required.',
-          );
-        }
-
-        return BibleService.getVerseRange(
-          reference.book,
-          reference.chapter,
-          startVerse,
-          endVerse,
-          version: reference.translation,
-        );
+      return verses;
     }
+
+    /*
+     * SINGLE VERSE
+     *
+     * Genesis 1:1
+     */
+    if (reference.type == BibleReferenceType.verse) {
+      final startVerse = reference.startVerse;
+
+      if (startVerse == null) {
+        throw StateError(
+          'Invalid verse reference: '
+          '${reference.displayReference}.',
+        );
+      }
+
+      final endVerse = reference.endVerse ?? startVerse;
+
+      final verses = await BibleService.getVerseRange(
+        reference.book,
+        reference.chapter,
+        startVerse,
+        endVerse,
+        version: reference.translation,
+      );
+
+      if (verses.isEmpty) {
+        throw StateError(
+          'No verses were found for '
+          '${reference.displayReference}.',
+        );
+      }
+
+      return verses;
+    }
+
+    /*
+     * VERSE RANGE
+     *
+     * Genesis 1:1-5
+     */
+    if (reference.type == BibleReferenceType.verseRange) {
+      final startVerse = reference.startVerse;
+
+      final endVerse = reference.endVerse;
+
+      if (startVerse == null || endVerse == null) {
+        throw StateError(
+          'Invalid verse range: '
+          '${reference.displayReference}.',
+        );
+      }
+
+      final verses = await BibleService.getVerseRange(
+        reference.book,
+        reference.chapter,
+        startVerse,
+        endVerse,
+        version: reference.translation,
+      );
+
+      if (verses.isEmpty) {
+        throw StateError(
+          'No verses were found for '
+          '${reference.displayReference}.',
+        );
+      }
+
+      return verses;
+    }
+
+    throw StateError('Unsupported Bible reference type.');
   }
 
   static Future<MessageBuilder> buildMessage({

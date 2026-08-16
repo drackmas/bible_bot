@@ -642,6 +642,7 @@ class BibleService {
       'jude': 'Jude',
 
       'rev': 'Revelation',
+      'revelations' : 'Revelation',
       'revelation': 'Revelation',
       'revelationofjohn': 'Revelation',
       'therevelation': 'Revelation',
