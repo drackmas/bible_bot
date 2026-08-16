@@ -10,15 +10,11 @@ import 'package:nyxx_commands/nyxx_commands.dart';
 /// `Genesis 1:1`
 ///
 /// becomes one String instead of only `Genesis`.
-const Converter<String> bibleReferenceInputConverter =
-    Converter<String>(
+const Converter<String> bibleReferenceInputConverter = Converter<String>(
   _convertBibleReferenceInput,
 );
 
-String? _convertBibleReferenceInput(
-  StringView view,
-  ContextData context,
-) {
+String? _convertBibleReferenceInput(StringView view, ContextData context) {
   final input = view.remaining.trim();
 
   if (input.isEmpty) {

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../errors/bible_exception.dart';
 import '../models/translation.dart';
 import '../models/verse.dart';
 import 'translation_service.dart';
@@ -33,12 +34,18 @@ class BibleService {
   static Future<String> _resolveFileName(
     String versionId,
   ) async {
-    final translation =
-        await TranslationService.get(
-      versionId,
-    );
+    try {
+      final translation =
+          await TranslationService.get(
+        versionId,
+      );
 
-    return translation.file;
+      return translation.file;
+    } catch (error) {
+      throw BibleConfigurationException(
+        'The requested Bible translation is not configured.',
+      );
+    }
   }
 
   static Future<List<Verse>> loadBook(
@@ -56,35 +63,55 @@ class BibleService {
     final versionCache = _cache[ver];
 
     if (versionCache != null &&
-        versionCache.containsKey(normalizedBook)) {
-      return versionCache[normalizedBook]!;
+        versionCache.containsKey(
+          normalizedBook,
+        )) {
+      return versionCache[
+          normalizedBook]!;
     }
 
     final fileName =
         await _resolveFileName(ver);
 
     final file = File(
-      p.join('assets', fileName),
+      p.join(
+        'assets',
+        fileName,
+      ),
     );
 
     if (!await file.exists()) {
-      throw StateError(
-        'Bible file not found: $fileName',
+      throw const BibleDataException(
+        'The Bible translation data could not be found.',
       );
     }
 
-    final decoded = jsonDecode(
-      await file.readAsString(),
-    );
+    late final dynamic decoded;
+
+    try {
+      decoded = jsonDecode(
+        await file.readAsString(),
+      );
+    } on FormatException {
+      throw const BibleDataException(
+        'The Bible translation data is invalid.',
+      );
+    } on FileSystemException {
+      throw const BibleDataException(
+        'The Bible translation data could not be read.',
+      );
+    }
 
     if (decoded is! Map) {
-      throw StateError(
-        '$fileName contains invalid Bible JSON.',
+      throw const BibleDataException(
+        'The Bible translation data is invalid.',
       );
     }
 
     final data =
-        Map<String, dynamic>.from(decoded);
+        Map<String, dynamic>.from(
+      decoded,
+    );
 
     final books =
         data['books'] as List? ?? [];
@@ -108,13 +135,15 @@ class BibleService {
             Map<String, dynamic>.from(
           rawBook,
         );
+
         break;
       }
     }
 
     if (found == null) {
-      throw StateError(
-        'Book "$bookName" was not found in $ver.',
+      throw BibleNotFoundException(
+        'The book **$bookName** was not found '
+        'in the $ver translation.',
       );
     }
 
@@ -130,7 +159,9 @@ class BibleService {
 
       final chapterNumber =
           int.tryParse(
-        rawChapter['chapter']?.toString() ?? '',
+        rawChapter['chapter']
+                ?.toString() ??
+            '',
       );
 
       if (chapterNumber == null) {
@@ -140,14 +171,17 @@ class BibleService {
       final chapterVerses =
           rawChapter['verses'] as List? ?? [];
 
-      for (final rawVerse in chapterVerses) {
+      for (final rawVerse
+          in chapterVerses) {
         if (rawVerse is! Map) {
           continue;
         }
 
         final verseNumber =
             int.tryParse(
-          rawVerse['verse']?.toString() ?? '',
+          rawVerse['verse']
+                  ?.toString() ??
+              '',
         );
 
         final text =
@@ -171,13 +205,17 @@ class BibleService {
     verses.sort(
       (a, b) {
         final chapterCompare =
-            a.chapter.compareTo(b.chapter);
+            a.chapter.compareTo(
+          b.chapter,
+        );
 
         if (chapterCompare != 0) {
           return chapterCompare;
         }
 
-        return a.verse.compareTo(b.verse);
+        return a.verse.compareTo(
+          b.verse,
+        );
       },
     );
 
@@ -200,20 +238,21 @@ class BibleService {
     String? version,
   }) async {
     if (chapter < 1) {
-      throw StateError(
-        'Chapter must be at least 1.',
+      throw const BibleInputException(
+        'Chapter must be at least **1**.',
       );
     }
 
     if (start < 1) {
-      throw StateError(
-        'Verse must be at least 1.',
+      throw const BibleInputException(
+        'Verse must be at least **1**.',
       );
     }
 
     if (end < start) {
-      throw StateError(
-        'Ending verse cannot be before starting verse.',
+      throw const BibleInputException(
+        'The ending verse cannot be before '
+        'the starting verse.',
       );
     }
 
@@ -232,8 +271,9 @@ class BibleService {
         .toList();
 
     if (result.isEmpty) {
-      throw StateError(
-        '$book $chapter:$start-$end was not found.',
+      throw BibleNotFoundException(
+        'The passage **$book $chapter:$start-$end** '
+        'was not found.',
       );
     }
 
@@ -246,8 +286,8 @@ class BibleService {
     String? version,
   }) async {
     if (chapter < 1) {
-      throw StateError(
-        'Chapter must be at least 1.',
+      throw const BibleInputException(
+        'Chapter must be at least **1**.',
       );
     }
 
@@ -264,8 +304,8 @@ class BibleService {
         .toList();
 
     if (result.isEmpty) {
-      throw StateError(
-        '$book $chapter was not found.',
+      throw BibleNotFoundException(
+        'Chapter **$book $chapter** was not found.',
       );
     }
 
@@ -291,27 +331,44 @@ class BibleService {
         await _resolveFileName(ver);
 
     final file = File(
-      p.join('assets', fileName),
+      p.join(
+        'assets',
+        fileName,
+      ),
     );
 
     if (!await file.exists()) {
-      throw StateError(
-        'Bible file not found: $fileName',
+      throw const BibleDataException(
+        'The Bible translation data could not be found.',
       );
     }
 
-    final decoded = jsonDecode(
-      await file.readAsString(),
-    );
+    late final dynamic decoded;
+
+    try {
+      decoded = jsonDecode(
+        await file.readAsString(),
+      );
+    } on FormatException {
+      throw const BibleDataException(
+        'The Bible translation data is invalid.',
+      );
+    } on FileSystemException {
+      throw const BibleDataException(
+        'The Bible translation data could not be read.',
+      );
+    }
 
     if (decoded is! Map) {
-      throw StateError(
-        '$fileName contains invalid JSON.',
+      throw const BibleDataException(
+        'The Bible translation data is invalid.',
       );
     }
 
     final data =
-        Map<String, dynamic>.from(decoded);
+        Map<String, dynamic>.from(
+      decoded,
+    );
 
     final books =
         data['books'] as List? ?? [];
@@ -332,7 +389,8 @@ class BibleService {
       }
     }
 
-    _bookListCache[ver] = names;
+    _bookListCache[ver] =
+        names;
 
     return names;
   }
@@ -374,7 +432,8 @@ class BibleService {
     );
 
     for (final bookName in books) {
-      final verses = await loadBook(
+      final verses =
+          await loadBook(
         bookName,
         version: version,
       );
@@ -582,44 +641,17 @@ class BibleService {
 
       'jude': 'Jude',
 
-      // ------------------------------------------------------------
-      // Revelation
-      // ------------------------------------------------------------
-
       'rev': 'Revelation',
       'revelation': 'Revelation',
-      'revelations' : 'Revelation',
-
-      // Common alternate names.
       'revelationofjohn': 'Revelation',
       'therevelation': 'Revelation',
       'therevelationofjohn': 'Revelation',
-
-      // Longer traditional names.
       'revelationofsaintjohn': 'Revelation',
       'therevelationofsaintjohn': 'Revelation',
-
-      // Common alternate title.
       'apocalypse': 'Revelation',
       'apoc': 'Revelation',
     };
 
-    /*
-     * Normalize the user's input before looking it up.
-     *
-     * Spaces, periods, underscores, and hyphens are ignored.
-     *
-     * Examples:
-     *
-     *   "Revelation of John"
-     *       -> "revelationofjohn"
-     *
-     *   "Revelation-of-John"
-     *       -> "revelationofjohn"
-     *
-     *   "REV."
-     *       -> "rev"
-     */
     final key = input
         .trim()
         .toLowerCase()

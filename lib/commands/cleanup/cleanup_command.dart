@@ -12,18 +12,9 @@ ChatGroup createCleanupCommand() {
       ChatCommand(
         'messages',
         'Delete recent messages.',
-        id(
-          'cleanup-messages',
-          (
-            ChatContext context,
-            int amount,
-          ) async {
-            await cleanupMessages(
-              context,
-              amount,
-            );
-          },
-        ),
+        id('cleanup-messages', (ChatContext context, int amount) async {
+          await cleanupMessages(context, amount);
+        }),
       ),
     ],
   );
@@ -40,10 +31,7 @@ ChatGroup createCleanupCommand() {
 ///
 /// deletes the three messages immediately before the command,
 /// then deletes the command itself.
-Future<void> cleanupMessages(
-  ChatContext context,
-  int amount,
-) async {
+Future<void> cleanupMessages(ChatContext context, int amount) async {
   if (context.guild == null) {
     await _sendChannelMessage(
       context,
@@ -51,8 +39,7 @@ Future<void> cleanupMessages(
         embeds: [
           EmbedBuilder(
             title: '❌ Cleanup',
-            description:
-                'This command can only be used inside a server.',
+            description: 'This command can only be used inside a server.',
             color: const DiscordColor(0xD32F2F),
           ),
         ],
@@ -69,8 +56,7 @@ Future<void> cleanupMessages(
         embeds: [
           EmbedBuilder(
             title: '❌ Cleanup',
-            description:
-                'You must specify at least **1** message.',
+            description: 'You must specify at least **1** message.',
             color: const DiscordColor(0xD32F2F),
           ),
         ],
@@ -104,8 +90,7 @@ Future<void> cleanupMessages(
         embeds: [
           EmbedBuilder(
             title: '❌ Cleanup',
-            description:
-                'This command must be used as a text command.',
+            description: 'This command must be used as a text command.',
             color: const DiscordColor(0xD32F2F),
           ),
         ],
@@ -131,8 +116,7 @@ Future<void> cleanupMessages(
           embeds: [
             EmbedBuilder(
               title: '🧹 Cleanup',
-              description:
-                  'There are no messages available to delete.',
+              description: 'There are no messages available to delete.',
               color: const DiscordColor(0xFFA000),
             ),
           ],
@@ -141,9 +125,7 @@ Future<void> cleanupMessages(
 
       await commandMessage.delete();
 
-      await _deleteLater(
-        response,
-      );
+      await _deleteLater(response);
 
       return;
     }
@@ -155,9 +137,7 @@ Future<void> cleanupMessages(
         await message.delete();
         deleted++;
       } catch (error) {
-        print(
-          'Failed to delete message ${message.id}: $error',
-        );
+        print('Failed to delete message ${message.id}: $error');
       }
     }
 
@@ -187,13 +167,9 @@ Future<void> cleanupMessages(
 
     // Remove the confirmation shortly afterward so cleanup
     // does not leave a permanent bot message in the channel.
-    await _deleteLater(
-      response,
-    );
+    await _deleteLater(response);
   } catch (error, stackTrace) {
-    print(
-      'Cleanup error: $error',
-    );
+    print('Cleanup error: $error');
 
     print(stackTrace);
 
@@ -250,35 +226,20 @@ Future<Message> _sendChannelMessage(
   ChatContext context,
   MessageBuilder builder,
 ) {
-  return context.channel.sendMessage(
-    builder,
-  );
+  return context.channel.sendMessage(builder);
 }
 
 /// Deletes a cleanup confirmation after a short delay.
-Future<void> _deleteLater(
-  Message message,
-) async {
-  await Future<void>.delayed(
-    const Duration(seconds: 5),
-  );
+Future<void> _deleteLater(Message message) async {
+  await Future<void>.delayed(const Duration(seconds: 5));
 
   try {
     await message.delete();
   } catch (error) {
-    print(
-      'Failed to delete cleanup confirmation: $error',
-    );
+    print('Failed to delete cleanup confirmation: $error');
   }
 }
 
-String _friendlyError(
-  Object error,
-) {
-  return error
-      .toString()
-      .replaceFirst(
-        'Bad state: ',
-        '',
-      );
+String _friendlyError(Object error) {
+  return error.toString().replaceFirst('Bad state: ', '');
 }

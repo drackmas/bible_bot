@@ -15,7 +15,9 @@ class BibleReferenceParser {
 
     if (cleaned.isEmpty) {
       throw const FormatException(
-        'Bible reference cannot be empty.',
+        'A Bible reference is required.\n\n'
+        '**Example:**\n'
+        '`!bible lookup Genesis 1:1`',
       );
     }
 
@@ -43,7 +45,9 @@ class BibleReferenceParser {
 
     if (cleaned.isEmpty) {
       throw const FormatException(
-        'Bible reference cannot be empty.',
+        'A Bible reference is required.\n\n'
+        '**Example:**\n'
+        '`!bible lookup Genesis 1:1`',
       );
     }
 
@@ -57,29 +61,37 @@ class BibleReferenceParser {
           rangeMatch.group(1)!.trim();
 
       final chapter =
-          int.parse(rangeMatch.group(2)!);
+          int.parse(
+        rangeMatch.group(2)!,
+      );
 
       final start =
-          int.parse(rangeMatch.group(3)!);
+          int.parse(
+        rangeMatch.group(3)!,
+      );
 
       final end =
-          int.parse(rangeMatch.group(4)!);
+          int.parse(
+        rangeMatch.group(4)!,
+      );
 
       if (chapter < 1) {
         throw const FormatException(
-          'Chapter must be at least 1.',
+          'Chapter must be at least **1**.',
         );
       }
 
-      if (start < 1 || end < 1) {
+      if (start < 1 ||
+          end < 1) {
         throw const FormatException(
-          'Verse numbers must be at least 1.',
+          'Verse numbers must be at least **1**.',
         );
       }
 
       if (end < start) {
         throw const FormatException(
-          'Ending verse cannot be before starting verse.',
+          'The ending verse cannot be before '
+          'the starting verse.',
         );
       }
 
@@ -104,20 +116,24 @@ class BibleReferenceParser {
           verseMatch.group(1)!.trim();
 
       final chapter =
-          int.parse(verseMatch.group(2)!);
+          int.parse(
+        verseMatch.group(2)!,
+      );
 
       final verse =
-          int.parse(verseMatch.group(3)!);
+          int.parse(
+        verseMatch.group(3)!,
+      );
 
       if (chapter < 1) {
         throw const FormatException(
-          'Chapter must be at least 1.',
+          'Chapter must be at least **1**.',
         );
       }
 
       if (verse < 1) {
         throw const FormatException(
-          'Verse must be at least 1.',
+          'Verse must be at least **1**.',
         );
       }
 
@@ -148,7 +164,7 @@ class BibleReferenceParser {
 
       if (chapter < 1) {
         throw const FormatException(
-          'Chapter must be at least 1.',
+          'Chapter must be at least **1**.',
         );
       }
 
@@ -157,20 +173,20 @@ class BibleReferenceParser {
           bookRaw,
         ),
         chapter: chapter,
-        startVerse: null,
+        startVerse: 1,
         endVerse: null,
         translation: translation,
       );
     }
 
     throw const FormatException(
-      'Invalid Bible reference.\n\n'
-      'Examples:\n'
-      '`Genesis 1:1`\n'
-      '`Genesis 1:1 BSB`\n'
-      '`Genesis 1`\n'
-      '`Genesis 1 BSB`\n'
-      '`John 3:16-18`',
+      'I could not understand that Bible reference.\n\n'
+      '**Examples:**\n'
+      '`!bible lookup Genesis 1:1`\n'
+      '`!bible lookup John 3:16`\n'
+      '`!bible lookup Revelation 1:1`\n'
+      '`!bible lookup Genesis 1:1 BSB`\n'
+      '`!bible lookup John 3:16-18`',
     );
   }
 }
